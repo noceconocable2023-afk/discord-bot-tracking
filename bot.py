@@ -62,16 +62,13 @@ def save_data(data):
 # ==========================================
 @bot.event
 async def on_ready():
-    # 1. Limpia los comandos GLOBALES (los que no responden)
-    bot.tree.clear_commands(guild=None)
-    await bot.tree.sync(guild=None)
-    
-    # 2. Limpia y sincroniza los comandos de tu SERVIDOR (los que sí funcionan)
-    bot.tree.clear_commands(guild=GUILD)
-    await bot.tree.sync(guild=GUILD)
-    
-    print(f"✅ Limpieza completada. Conectado como: {bot.user}")
-    await bot.change_presence(activity=discord.Game(name="/help"))
+    # Sincronizamos solo con tu servidor para que sea instantáneo
+    # Esto evita el error de "La aplicación no respondió" al iniciar
+    try:
+        await bot.tree.sync(guild=GUILD)
+        print(f"✅ Bot sincronizado y operativo como: {bot.user}")
+    except Exception as e:
+        print(f"Error al sincronizar: {e}")
 
 # ==========================================
 # COMANDOS (SLASH COMMANDS)
@@ -79,16 +76,18 @@ async def on_ready():
 
 @bot.tree.command(name="help", description="Muestra los comandos", guild=GUILD)
 async def help_command(interaction: discord.Interaction):
+    # Discord requiere una respuesta rápida, si ves que falla, 
+    # usa interaction.response.defer() pero para mensajes simples no hace falta.
     mensaje = (
         "📦 **SISTEMA DE REQUERIMIENTOS**\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "**/crear** `[codigo]` `[estado]` → Nuevo registro\n"
-        "**/ver** `[codigo]` → Ver historial y fechas\n"
-        "**/actualizar** `[codigo]` `[estado]` → Nuevo estado\n"
-        "**/retroceder** `[codigo]` → Borra última actualización\n"
-        "**/lista** `[filtro]` → Ver registros (Abiertos/Cerrados)\n"
-        "**/cerrar** `[codigo]` → Finaliza registro\n"
-        "**/eliminar** `[codigo]` → Borra todo el registro"
+        "**/crear** `[codigo]` `[estado]`\n"
+        "**/ver** `[codigo]`\n"
+        "**/actualizar** `[codigo]`\n"
+        "**/retroceder** `[codigo]`\n"
+        "**/lista** `[filtro]`\n"
+        "**/cerrar** `[codigo]`\n"
+        "**/eliminar** `[codigo]`"
     )
     await interaction.response.send_message(mensaje)
 
