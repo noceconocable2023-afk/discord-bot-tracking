@@ -5,6 +5,12 @@ import json
 import os
 
 # =========================
+# GUILD ID (TU SERVIDOR)
+# =========================
+GUILD_ID = 1493618366093459669
+GUILD = discord.Object(id=GUILD_ID)
+
+# =========================
 # KEEP ALIVE (Render)
 # =========================
 from flask import Flask
@@ -51,11 +57,11 @@ def save_data(data):
         json.dump(data, f, indent=4)
 
 # =========================
-# EVENTO READY
+# READY
 # =========================
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
+    await bot.tree.sync(guild=GUILD)  # 🔥 INSTANTÁNEO
     print(f"Bot conectado como {bot.user}")
 
     await bot.change_presence(
@@ -96,10 +102,6 @@ class ConfirmarEliminar(discord.ui.View):
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("❌ No puedes usar esta acción", ephemeral=True)
-            return
-
         await interaction.response.edit_message(
             content="❎ Eliminación cancelada",
             view=None
@@ -127,7 +129,7 @@ class ConfirmarRetroceder(discord.ui.View):
                 save_data(data)
 
                 await interaction.response.edit_message(
-                    content=f"↩️ **{self.codigo} retrocedido**\nEstado actual: {data[self.codigo]['estado']}",
+                    content=f"↩️ **{self.codigo} retrocedido**\nEstado: {data[self.codigo]['estado']}",
                     view=None
                 )
             else:
@@ -143,61 +145,48 @@ class ConfirmarRetroceder(discord.ui.View):
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("❌ No puedes usar esta acción", ephemeral=True)
-            return
-
         await interaction.response.edit_message(
             content="❎ Operación cancelada",
             view=None
         )
 
 # =========================
-# COMANDOS
+# COMANDOS SLASH (INSTANT)
 # =========================
 
-@bot.tree.command(name="help", description="Ver comandos disponibles")
+@bot.tree.command(name="help", description="Ver comandos", guild=GUILD)
 async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         "📖 **Comandos disponibles:**\n\n"
-        "🔹 /crear → Crear requerimiento\n"
-        "🔹 /estado → Ver estado\n"
-        "🔹 /actualizar → Actualizar estado\n"
-        "🔹 /historial → Ver historial\n"
-        "🔹 /retroceder → Eliminar último estado\n"
-        "🔹 /eliminar → Eliminar requerimiento\n"
+        "🔹 /crear\n"
+        "🔹 /estado\n"
+        "🔹 /actualizar\n"
+        "🔹 /historial\n"
+        "🔹 /retroceder\n"
+        "🔹 /eliminar\n"
     )
 
-@bot.tree.command(name="crear", description="Crear un requerimiento")
-@app_commands.describe(codigo="Código del requerimiento", estado="Estado inicial")
+@bot.tree.command(name="crear", description="Crear requerimiento", guild=GUILD)
+@app_commands.describe(codigo="Código", estado="Estado inicial")
 async def crear(interaction: discord.Interaction, codigo: str, estado: str):
     data = load_data()
-
-    data[codigo] = {
-        "estado": estado,
-        "historial": [estado]
-    }
-
+    data[codigo] = {"estado": estado, "historial": [estado]}
     save_data(data)
 
-    await interaction.response.send_message(
-        f"✅ **{codigo} creado**\nEstado: {estado}"
-    )
+    await interaction.response.send_message(f"✅ {codigo} creado\nEstado: {estado}")
 
-@bot.tree.command(name="estado", description="Consultar estado")
-@app_commands.describe(codigo="Código del requerimiento")
+@bot.tree.command(name="estado", description="Consultar estado", guild=GUILD)
+@app_commands.describe(codigo="Código")
 async def estado(interaction: discord.Interaction, codigo: str):
     data = load_data()
 
     if codigo in data:
-        await interaction.response.send_message(
-            f"📦 **{codigo}**\nEstado: {data[codigo]['estado']}"
-        )
+        await interaction.response.send_message(f"📦 {codigo}\nEstado: {data[codigo]['estado']}")
     else:
         await interaction.response.send_message("❌ No existe ese requerimiento")
 
-@bot.tree.command(name="actualizar", description="Actualizar estado")
-@app_commands.describe(codigo="Código del requerimiento", nuevo_estado="Nuevo estado")
+@bot.tree.command(name="actualizar", description="Actualizar estado", guild=GUILD)
+@app_commands.describe(codigo="Código", nuevo_estado="Nuevo estado")
 async def actualizar(interaction: discord.Interaction, codigo: str, nuevo_estado: str):
     data = load_data()
 
@@ -206,27 +195,23 @@ async def actualizar(interaction: discord.Interaction, codigo: str, nuevo_estado
         data[codigo]["historial"].append(nuevo_estado)
         save_data(data)
 
-        await interaction.response.send_message(
-            f"🔄 **{codigo} actualizado**\nEstado: {nuevo_estado}"
-        )
+        await interaction.response.send_message(f"🔄 {codigo} actualizado\nEstado: {nuevo_estado}")
     else:
         await interaction.response.send_message("❌ No existe ese requerimiento")
 
-@bot.tree.command(name="historial", description="Ver historial")
-@app_commands.describe(codigo="Código del requerimiento")
+@bot.tree.command(name="historial", description="Ver historial", guild=GUILD)
+@app_commands.describe(codigo="Código")
 async def historial(interaction: discord.Interaction, codigo: str):
     data = load_data()
 
     if codigo in data:
         historial = "\n- ".join(data[codigo]["historial"])
-        await interaction.response.send_message(
-            f"📜 **Historial de {codigo}:**\n- {historial}"
-        )
+        await interaction.response.send_message(f"📜 Historial de {codigo}:\n- {historial}")
     else:
         await interaction.response.send_message("❌ No existe ese requerimiento")
 
-@bot.tree.command(name="retroceder", description="Eliminar último estado")
-@app_commands.describe(codigo="Código del requerimiento")
+@bot.tree.command(name="retroceder", description="Eliminar último estado", guild=GUILD)
+@app_commands.describe(codigo="Código")
 async def retroceder(interaction: discord.Interaction, codigo: str):
     data = load_data()
 
@@ -237,12 +222,12 @@ async def retroceder(interaction: discord.Interaction, codigo: str):
     view = ConfirmarRetroceder(codigo, interaction.user.id)
 
     await interaction.response.send_message(
-        f"⚠️ ¿Deseas retroceder el estado de **{codigo}**?",
+        f"⚠️ ¿Deseas retroceder **{codigo}**?",
         view=view
     )
 
-@bot.tree.command(name="eliminar", description="Eliminar requerimiento")
-@app_commands.describe(codigo="Código del requerimiento")
+@bot.tree.command(name="eliminar", description="Eliminar requerimiento", guild=GUILD)
+@app_commands.describe(codigo="Código")
 async def eliminar(interaction: discord.Interaction, codigo: str):
     data = load_data()
 
@@ -253,7 +238,7 @@ async def eliminar(interaction: discord.Interaction, codigo: str):
     view = ConfirmarEliminar(codigo, interaction.user.id)
 
     await interaction.response.send_message(
-        f"⚠️ ¿Seguro que deseas eliminar **{codigo}**?",
+        f"⚠️ ¿Eliminar **{codigo}**?",
         view=view
     )
 
