@@ -62,8 +62,16 @@ def save_data(data):
 # ==========================================
 @bot.event
 async def on_ready():
+    # 1. Limpia los comandos GLOBALES (los que no responden)
+    bot.tree.clear_commands(guild=None)
+    await bot.tree.sync(guild=None)
+    
+    # 2. Limpia y sincroniza los comandos de tu SERVIDOR (los que sí funcionan)
+    bot.tree.clear_commands(guild=GUILD)
     await bot.tree.sync(guild=GUILD)
-    print(f"✅ Bot operativo: {bot.user}")
+    
+    print(f"✅ Limpieza completada. Conectado como: {bot.user}")
+    await bot.change_presence(activity=discord.Game(name="/help"))
 
 # ==========================================
 # COMANDOS (SLASH COMMANDS)
