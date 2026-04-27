@@ -17,24 +17,22 @@ def home():
     return "Servidor del Bot encendido"
 
 def run_flask():
-    # Render asigna el puerto automáticamente en la variable PORT
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_flask)
-    t.daemon = True # Esto asegura que el hilo se cierre si el bot se apaga
+    t.daemon = True
     t.start()
 
 # ==========================================
 # CONFIGURACIÓN DEL BOT Y ZONA HORARIA
 # ==========================================
 TOKEN = os.getenv("TOKEN")
-GUILD_ID = 1493618366093459669  # Tu ID de servidor
+GUILD_ID = 1493618366093459669 
 GUILD = discord.Object(id=GUILD_ID)
 
 def get_lima_time():
-    # Ajuste manual para UTC-5 (America/Lima)
     return (datetime.utcnow() - timedelta(hours=5)).strftime("%d/%m/%Y %H:%M:%S")
 
 intents = discord.Intents.default()
@@ -64,11 +62,8 @@ def save_data(data):
 # ==========================================
 @bot.event
 async def on_ready():
-    # Sincronizamos comandos solo con tu servidor para que sea instantáneo
     await bot.tree.sync(guild=GUILD)
-    print(f"✅ Conectado como: {bot.user}")
-    print(f"📅 Hora Lima: {get_lima_time()}")
-    await bot.change_presence(activity=discord.Game(name="/help"))
+    print(f"✅ Bot operativo: {bot.user}")
 
 # ==========================================
 # COMANDOS (SLASH COMMANDS)
@@ -79,11 +74,13 @@ async def help_command(interaction: discord.Interaction):
     mensaje = (
         "📦 **SISTEMA DE REQUERIMIENTOS**\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "**/crear** [codigo] [estado] → Nuevo registro\n"
-        "**/ver** [codigo] → Consulta historial y fechas\n"
-        "**/actualizar** [codigo] [estado] → Cambia el estado\n"
-        "**/lista** [filtro] → Ver todos los registros\n"
-        "**/cerrar** [codigo] → Finaliza un registro"
+        "**/crear** `[codigo]` `[estado]` → Nuevo registro\n"
+        "**/ver** `[codigo]` → Ver historial y fechas\n"
+        "**/actualizar** `[codigo]` `[estado]` → Nuevo estado\n"
+        "**/retroceder** `[codigo]` → Borra última actualización\n"
+        "**/lista** `[filtro]` → Ver registros (Abiertos/Cerrados)\n"
+        "**/cerrar** `[codigo]` → Finaliza registro\n"
+        "**/eliminar** `[codigo]` → Borra todo el registro"
     )
     await interaction.response.send_message(mensaje)
 
@@ -119,7 +116,7 @@ async def ver(interaction: discord.Interaction, codigo: str):
         f"📋 **REQUERIMIENTO: {codigo}**\n"
         f"**Estado:** {info['estado']} ({estado_str})\n"
         f"**Creación:** {info['creado_el']}\n"
-        f"**Última Act.:** {info['actualizado_el']}\n"
+        f"**Última Act.:** {info['actualizado_el']}\n\n"
         f"**Línea de Tiempo:**\n{historial}"
     )
     await interaction.response.send_message(msg)
@@ -128,7 +125,7 @@ async def ver(interaction: discord.Interaction, codigo: str):
 async def actualizar(interaction: discord.Interaction, codigo: str, estado: str):
     data = load_data()
     if codigo not in data or data[codigo].get("cerrado"):
-        return await interaction.response.send_message("❌ No existe o ya está cerrado.", ephemeral=True)
+        return await interaction.response.send_message("❌ No existe o está cerrado.", ephemeral=True)
 
     ahora = get_lima_time()
     data[codigo]["estado"] = estado
@@ -137,6 +134,32 @@ async def actualizar(interaction: discord.Interaction, codigo: str, estado: str)
     
     save_data(data)
     await interaction.response.send_message(f"🔄 **{codigo}** actualizado a `{estado}`.")
+
+@bot.tree.command(name="retroceder", description="Eliminar la última actualización de estado", guild=GUILD)
+async def retroceder(interaction: discord.Interaction, codigo: str):
+    data = load_data()
+    if codigo not in data:
+        return await interaction.response.send_message("❌ No existe ese código.", ephemeral=True)
+    
+    req = data[codigo]
+    if len(req["historial"]) <= 1:
+        return await interaction.response.send_message("⚠️ No hay estados previos para retroceder.", ephemeral=True)
+
+    # Eliminar el último del historial
+    req["historial"].pop()
+    
+    # El nuevo estado actual es el que quedó al final de la lista
+    ultimo_log = req["historial"][-1]
+    # Extraemos el nombre del estado (asumiendo formato "Estado: Nombre (Fecha)")
+    nuevo_estado = ultimo_log.split(":")[1].split("(")[0].strip()
+    
+    req["estado"] = nuevo_estado
+    req["actualizado_el"] = get_lima_time()
+    req["cerrado"] = False # Si estaba cerrado, lo reabre al retroceder
+    req["cerrado_el"] = None
+
+    save_data(data)
+    await interaction.response.send_message(f"⏮️ Se ha retrocedido el requerimiento **{codigo}** al estado: `{nuevo_estado}`.")
 
 @bot.tree.command(name="lista", description="Listar registros", guild=GUILD)
 @app_commands.choices(tipo=[
@@ -155,45 +178,60 @@ async def lista(interaction: discord.Interaction, tipo: app_commands.Choice[str]
         elif tipo.value == "todos": res.append(linea)
 
     if not res: return await interaction.response.send_message("📭 Sin datos.")
-    await interaction.response.send_message("\n".join(res[:20]))
+    await interaction.response.send_message(f"📋 **Lista ({tipo.name}):**\n" + "\n".join(res[:20]))
 
 # ==========================================
-# CIERRE CON BOTONES
+# CIERRES Y ELIMINACIÓN CON BOTONES
 # ==========================================
-class ConfirmarCerrar(discord.ui.View):
-    def __init__(self, codigo):
-        super().__init__(timeout=30)
+class ConfirmarAccion(discord.ui.View):
+    def __init__(self, codigo, accion):
+        super().__init__(timeout=20)
         self.codigo = codigo
+        self.accion = accion # "cerrar" o "eliminar"
 
-    @discord.ui.button(label="Cerrar permanentemente", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Confirmar", style=discord.ButtonStyle.danger)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
         data = load_data()
-        if self.codigo in data:
+        if self.codigo not in data:
+            return await interaction.response.edit_message(content="❌ El código ya no existe.", view=None)
+
+        if self.accion == "cerrar":
             ahora = get_lima_time()
             data[self.codigo]["cerrado"] = True
             data[self.codigo]["cerrado_el"] = ahora
             data[self.codigo]["historial"].append(f"CERRADO ({ahora})")
             save_data(data)
-            await interaction.response.edit_message(content=f"🔒 **{self.codigo}** cerrado a las {ahora}.", view=None)
+            await interaction.response.edit_message(content=f"🔒 **{self.codigo}** cerrado el {ahora}.", view=None)
+        
+        elif self.accion == "eliminar":
+            del data[self.codigo]
+            save_data(data)
+            await interaction.response.edit_message(content=f"🗑️ Registro **{self.codigo}** eliminado permanentemente.", view=None)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="❌ Cancelado.", view=None)
+        await interaction.response.edit_message(content="❌ Acción cancelada.", view=None)
 
 @bot.tree.command(name="cerrar", description="Cerrar un registro", guild=GUILD)
 async def cerrar(interaction: discord.Interaction, codigo: str):
     data = load_data()
     if codigo not in data or data[codigo].get("cerrado"):
         return await interaction.response.send_message("❌ No existe o ya está cerrado.", ephemeral=True)
-    
-    await interaction.response.send_message(f"⚠️ ¿Cerrar **{codigo}**?", view=ConfirmarCerrar(codigo))
+    await interaction.response.send_message(f"⚠️ ¿Cerrar **{codigo}**?", view=ConfirmarAccion(codigo, "cerrar"))
+
+@bot.tree.command(name="eliminar", description="Eliminar registro permanentemente", guild=GUILD)
+async def eliminar(interaction: discord.Interaction, codigo: str):
+    data = load_data()
+    if codigo not in data:
+        return await interaction.response.send_message("❌ El código no existe.", ephemeral=True)
+    await interaction.response.send_message(f"🚨 **¡ATENCIÓN!** ¿Eliminar por completo `{codigo}`? Esta acción no se puede deshacer.", view=ConfirmarAccion(codigo, "eliminar"))
 
 # ==========================================
 # INICIO DEL SERVICIO
 # ==========================================
 if __name__ == "__main__":
-    keep_alive() # Inicia Flask
+    keep_alive()
     try:
         bot.run(TOKEN)
     except Exception as e:
-        print(f"Error al iniciar el bot: {e}")
+        print(f"Error: {e}")
