@@ -246,9 +246,26 @@ async def eliminar(interaction: discord.Interaction, codigo: str):
     cod_up = codigo.upper()
     if cod_up in load_data(): await interaction.response.send_message(f"🚨 ¿Eliminar `{cod_up}`?", view=ConfirmarAccion(cod_up, "eliminar"))
 
-@bot.tree.command(name="help", description="Ayuda", guild=GUILD)
-async def help_cmd(interaction: discord.Interaction):
-    await interaction.response.send_message("📖 Comandos: `/crear`, `/actualizar`, `/ver`, `/lista`, `/retroceder`, `/eliminar`, `/respaldo`, `/restaurar`.")
+@bot.tree.command(name="help", description="Guía detallada de los comandos del sistema", guild=GUILD)
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📦 Sistema de Gestión de Requerimientos", 
+        description="Aquí tienes la guía de uso para gestionar tus registros de forma eficiente:",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(name="🆕 /crear", value="Inicia un registro. Pide un **CÓDIGO** y un **ASUNTO**. Se guarda automáticamente en MAYÚSCULAS.", inline=False)
+    embed.add_field(name="🔄 /actualizar", value="Avanza el estado del requerimiento. Solo muestra pasos siguientes o la opción **CANCELADO**.", inline=False)
+    embed.add_field(name="🔍 /ver", value="Muestra toda la información: Asunto, Estado actual y la línea de tiempo (historial).", inline=False)
+    embed.add_field(name="📋 /lista", value="Muestra los registros con **Paginación** (botones Anterior/Siguiente). Filtra por Abiertos, Entregados, etc.", inline=False)
+    embed.add_field(name="⏮️ /retroceder", value="Deshace el último cambio de estado. Útil si te equivocaste al actualizar.", inline=False)
+    embed.add_field(name="🗑️ /eliminar", value="Borra permanentemente el requerimiento del sistema.", inline=False)
+    embed.add_field(name="💾 /respaldo", value="Descarga el archivo `data.json`. Haz esto al final del día para no perder datos.", inline=False)
+    embed.add_field(name="📤 /restaurar", value="Sube tu archivo de respaldo si el bot se reinicia y aparece vacío.", inline=False)
+
+    embed.set_footer(text="Nota: Los estados ENTREGADO y CANCELADO cierran el registro automáticamente.")
+    
+    await interaction.response.send_message(embed=embed)
 
 if __name__ == "__main__":
     keep_alive()
