@@ -61,10 +61,13 @@ def save_data(data):
 # =========================
 @bot.event
 async def on_ready():
-    # ❌ BORRAR comandos globales
+    # 🔥 Limpiar comandos globales
     bot.tree.clear_commands(guild=None)
 
-    # ✅ SINCRONIZAR solo en tu servidor
+    # 🔥 Limpiar comandos del servidor
+    bot.tree.clear_commands(guild=GUILD)
+
+    # 🔥 Sincronizar limpio SOLO en tu servidor
     await bot.tree.sync(guild=GUILD)
 
     print(f"Bot conectado como {bot.user}")
